@@ -21,6 +21,9 @@
 */
 
 import UIKit
+import Alamofire
+//NSCameraUsageDescription
+//YWNjX2NiYzliMGEzMTdlNjI4Mjo2ODQwMDI3NzdiMTQ4MGNmNWMyNDAwZTgxNzM1YTYyMQ
 
 class ViewController: UIViewController {
   
@@ -90,7 +93,112 @@ extension ViewController : UIImagePickerControllerDelegate, UINavigationControll
     }
     
     imageView.image = image
-      
+    
+    takePictureButton.isHidden = true
+    progressView.progress = 0.0
+    progressView.isHidden = false
+    activityIndicatorView.startAnimating()
+    
+    
+    
     dismiss(animated: true, completion: nil)
+    
+    
+    
+    uploadImage(image: image, progress: { [unowned self]  (precent) in
+      self.progressView.setProgress(precent, animated: true)
+    }) { [unowned self] (tags, colors) in
+      self.takePictureButton.isHidden = false
+      self.progressView.isHidden = true
+      self.activityIndicatorView.stopAnimating()
+      
+      self.tags = tags
+      self.colors = colors
+      //        DispatchQueue.main.async {
+      //          self.performSegue(withIdentifier: "ShowResults", sender: self)
+      //        }
+    }
   }
 }
+
+
+//{
+//  bytesWritten, totalBytesWritten, totalBytesExpectedToWrite in
+//  DispatchQueue.main.async {
+//    let percent = (Float(totalBytesWritten) / Float(totalBytesExpectedToWrite))
+//    progress(percent: percent)
+//  }
+//  
+//  upload.validate()
+//  upload.responseJSON(completionHandler: { response in
+//    guard response.result.
+//  })
+
+
+extension ViewController {
+  
+  func uploadImage(image: UIImage, progress: @escaping (_ percent: Float) -> Void, completion: @escaping (_ tags: [String], _ colors: [PhotoColor]) -> Void){
+    
+    guard let imageData = UIImageJPEGRepresentation(image, 0.5) else {
+      print("Could not get JPEG representation of UIImage")
+      return
+    }
+    
+    Alamofire.upload(multipartFormData: { multipartFromData in multipartFromData.append(imageData, withName: "image/jpeg")}, usingThreshold: 0, to: "http://api.imagga.com/v1/content", method: .post, headers: ["Authorization" : "YWNjX2NiYzliMGEzMTdlNjI4Mjo2ODQwMDI3NzdiMTQ4MGNmNWMyNDAwZTgxNzM1YTYyMQ"], encodingCompletion: { result in
+      
+      switch result {
+      case .success(let upload, _, _):
+        upload.uploadProgress(closure: { (progressFact) in
+    
+          
+          DispatchQueue.main.async {
+            let percent = Float(progressFact.fractionCompleted)
+            progress(percent)
+          }
+          
+          
+          upload.validate()
+          upload.responseJSON(completionHandler: { (res: DataResponse<Any>) in
+            guard res.result.isSuccess else {
+              print("Error while uploading file: \(res.result.error?.localizedDescription)")
+              
+              completion([String](), [PhotoColor]())
+              
+              return
+            }
+            
+            
+            guard let responseJSON = res.result.value as? [String: Any],
+              let uploadedFiles = responseJSON["uploaded"] as? [Any],
+              let firstFile = uploadedFiles.first as? [String: Any],
+              let firstFileID = firstFile["id"] as? String else {
+                print("Invalid information recived from service")
+                
+                completion([String](), [PhotoColor]())
+                
+                return
+            }
+            
+            
+            print("Content uploaded with ID: \(firstFileID)")
+            
+            completion([String](), [PhotoColor]())
+            
+            
+          })
+          
+          
+        })
+      case .failure(let error):
+        print(error)
+      }
+      
+      }
+    )
+    
+  
+    
+  }
+
+}
+
