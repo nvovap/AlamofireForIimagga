@@ -114,9 +114,10 @@ extension ViewController : UIImagePickerControllerDelegate, UINavigationControll
       
       self.tags = tags
       self.colors = colors
-      //        DispatchQueue.main.async {
-      //          self.performSegue(withIdentifier: "ShowResults", sender: self)
-      //        }
+      
+      DispatchQueue.main.async {
+          self.performSegue(withIdentifier: "ShowResults", sender: self)
+      }
     }
   }
 }
@@ -144,48 +145,52 @@ extension ViewController {
       return
     }
     
-    Alamofire.upload(multipartFormData: { multipartFromData in multipartFromData.append(imageData, withName: "image/jpeg")}, usingThreshold: 0, to: "http://api.imagga.com/v1/content", method: .post, headers: ["Authorization" : "YWNjX2NiYzliMGEzMTdlNjI4Mjo2ODQwMDI3NzdiMTQ4MGNmNWMyNDAwZTgxNzM1YTYyMQ"], encodingCompletion: { result in
+    
+    Alamofire.upload(multipartFormData: { multipartFromData in multipartFromData.append(imageData, withName: "imagefile", fileName: "image.jpg", mimeType:  "image/jpeg")}, usingThreshold: 100000000, to: "http://api.imagga.com/v1/content", method: .post, headers: ["Authorization" : "Basic YWNjX2NiYzliMGEzMTdlNjI4Mjo2ODQwMDI3NzdiMTQ4MGNmNWMyNDAwZTgxNzM1YTYyMQ=="], encodingCompletion: { result in
       
       switch result {
       case .success(let upload, _, _):
         upload.uploadProgress(closure: { (progressFact) in
-    
+          
           
           DispatchQueue.main.async {
             let percent = Float(progressFact.fractionCompleted)
             progress(percent)
           }
+        })
+        
+        upload.validate()
+        upload.responseJSON(completionHandler: { (res: DataResponse<Any>) in
+          guard res.result.isSuccess else {
+            print("Error while uploading file: \(res.result.error?.localizedDescription)")
+            
+            completion([String](), [PhotoColor]())
+            
+            return
+          }
           
           
-          upload.validate()
-          upload.responseJSON(completionHandler: { (res: DataResponse<Any>) in
-            guard res.result.isSuccess else {
-              print("Error while uploading file: \(res.result.error?.localizedDescription)")
+          guard let responseJSON = res.result.value as? [String: Any],
+            let uploadedFiles = responseJSON["uploaded"] as? [Any],
+            let firstFile = uploadedFiles.first as? [String: Any],
+            let firstFileID = firstFile["id"] as? String else {
+              print("Invalid information recived from service")
               
               completion([String](), [PhotoColor]())
               
               return
+          }
+          
+          
+          print("Content uploaded with ID: \(firstFileID)")
+          
+          
+          
+          self.downloadTags(contentID: firstFileID) { tags in
+            self.downloadColors(contentID: firstFileID) { colors in
+              completion(tags, colors)
             }
-            
-            
-            guard let responseJSON = res.result.value as? [String: Any],
-              let uploadedFiles = responseJSON["uploaded"] as? [Any],
-              let firstFile = uploadedFiles.first as? [String: Any],
-              let firstFileID = firstFile["id"] as? String else {
-                print("Invalid information recived from service")
-                
-                completion([String](), [PhotoColor]())
-                
-                return
-            }
-            
-            
-            print("Content uploaded with ID: \(firstFileID)")
-            
-            completion([String](), [PhotoColor]())
-            
-            
-          })
+          }
           
           
         })
@@ -195,10 +200,79 @@ extension ViewController {
       
       }
     )
-    
-  
-    
   }
-
+  
+  func downloadTags(contentID: String, completion: @escaping ([String]) -> Void) {
+    Alamofire.request("http://api.imagga.com/v1/tagging", method: .get, parameters:  ["content": contentID], encoding: URLEncoding.default, headers:  ["Authorization" : "Basic YWNjX2NiYzliMGEzMTdlNjI4Mjo2ODQwMDI3NzdiMTQ4MGNmNWMyNDAwZTgxNzM1YTYyMQ=="]).responseJSON { (res) in
+      guard res.result.isSuccess else {
+        print("Error while uploading file: \(res.result.error?.localizedDescription)")
+        
+        completion([String]())
+        
+        return
+      }
+      
+      guard let responseJSON = res.result.value as? [String: AnyObject],
+        let results = responseJSON["results"] as? [AnyObject],
+        let firstResult = results.first,
+        let tagsAndConfidences = firstResult["tags"] as? [[String: AnyObject]] else {
+        print("Invalid tag information received from service")
+        completion([String]())
+        return
+      }
+      
+      
+      
+      let tags = tagsAndConfidences.flatMap({ dict in
+         return dict["tag"] as? String
+      })
+      
+      
+      completion(tags)
+      
+      
+    }
+  }
+  
+  
+  func downloadColors(contentID: String, completion: @escaping ([PhotoColor]) -> Void) {
+    Alamofire.request("http://api.imagga.com/v1/colors", method: .get, parameters:  ["content": contentID, "extract_object_colors": NSNumber(value: 0)], encoding: URLEncoding.default, headers:  ["Authorization" : "Basic YWNjX2NiYzliMGEzMTdlNjI4Mjo2ODQwMDI3NzdiMTQ4MGNmNWMyNDAwZTgxNzM1YTYyMQ=="]).responseJSON { (response) in
+        // 2.
+        guard response.result.isSuccess else {
+          print("Error while fetching colors: \(response.result.error)")
+          completion([PhotoColor]())
+          return
+        }
+      
+        // 3.
+        guard let responseJSON = response.result.value as? [String: AnyObject],
+          let results = responseJSON["results"] as? [AnyObject],
+          let firstResult = results.first as? [String: AnyObject],
+          let info = firstResult["info"] as? [String: AnyObject],
+          let imageColors = info["image_colors"] as? [[String: AnyObject]] else {
+            print("Invalid color information received from service")
+            completion([PhotoColor]())
+            return
+        }
+        
+        // 4.
+        let photoColors = imageColors.flatMap({ (dict) -> PhotoColor? in
+          guard let r = dict["r"] as? String,
+            let g = dict["g"] as? String,
+            let b = dict["b"] as? String,
+            let closestPaletteColor = dict["closest_palette_color"] as? String else {
+              return nil
+          }
+          return PhotoColor(red: Int(r),
+                            green: Int(g),
+                            blue: Int(b),
+                            colorName: closestPaletteColor)
+        })
+        
+        // 5.
+        completion(photoColors)
+    }
+  }
+  
 }
 
