@@ -20,10 +20,14 @@
 * THE SOFTWARE.
 */
 
+
+
 import UIKit
 import Alamofire
 //NSCameraUsageDescription
 //YWNjX2NiYzliMGEzMTdlNjI4Mjo2ODQwMDI3NzdiMTQ4MGNmNWMyNDAwZTgxNzM1YTYyMQ
+
+
 
 class ViewController: UIViewController {
   
@@ -37,6 +41,7 @@ class ViewController: UIViewController {
   fileprivate var tags: [String]?
   fileprivate var colors: [PhotoColor]?
 
+  
   // MARK: - View Life Cycle
   override func viewDidLoad() {
     super.viewDidLoad()
@@ -50,6 +55,7 @@ class ViewController: UIViewController {
     super.viewDidDisappear(animated)
 
     imageView.image = nil
+    
   }
 
   // MARK: - Navigation
@@ -200,6 +206,8 @@ extension ViewController {
       
       }
     )
+    
+  
   }
   
   func downloadTags(contentID: String, completion: @escaping ([String]) -> Void) {
