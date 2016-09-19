@@ -152,6 +152,9 @@ extension ViewController {
     }
     
     
+    
+    
+    
     Alamofire.upload(multipartFormData: { multipartFromData in multipartFromData.append(imageData, withName: "imagefile", fileName: "image.jpg", mimeType:  "image/jpeg")}, usingThreshold: 100000000, to: "http://api.imagga.com/v1/content", method: .post, headers: ["Authorization" : "Basic YWNjX2NiYzliMGEzMTdlNjI4Mjo2ODQwMDI3NzdiMTQ4MGNmNWMyNDAwZTgxNzM1YTYyMQ=="], encodingCompletion: { result in
       
       switch result {
